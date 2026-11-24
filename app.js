@@ -70,6 +70,13 @@ function getFirebaseModel(mode) {
   return model;
 }
 
+async function runFirebase(mode, prompt) {
+  const model = getFirebaseModel(mode);
+  if (!model) throw new Error("NO_FIREBASE_CONFIG");
+  const result = await model.generateContent(prompt);
+  return result.response.text();
+}
+
 // ---------- Direct on-device Prompt API (Gemini Nano) ----------
 
 function getLanguageModelCtor() {
