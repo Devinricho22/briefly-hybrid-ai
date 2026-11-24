@@ -69,3 +69,149 @@ function getFirebaseModel(mode) {
   firebaseModelCache[mode] = model;
   return model;
 }
+
+// ---------- Direct on-device Prompt API (Gemini Nano) ----------
+
+function getLanguageModelCtor() {
+  if (typeof LanguageModel !== "undefined") return LanguageModel;
+  if (window.ai && window.ai.languageModel) return window.ai.languageModel;
+  return null;
+}
+
+async function nanoAvailability() {
+  const ctor = getLanguageModelCtor();
+  if (!ctor) return "unavailable";
+  try {
+    if (typeof ctor.availability === "function") return await ctor.availability();
+    if (typeof ctor.capabilities === "function") {
+      const caps = await ctor.capabilities();
+      return caps && caps.available === "readily" ? "available" : "unavailable";
+    }
+  } catch (_) { /* fall through */ }
+  return "unavailable";
+}
+
+async function runOnDevice(prompt) {
+  const ctor = getLanguageModelCtor();
+  if (!ctor) throw new Error("NO_ON_DEVICE");
+  const availability = await nanoAvailability();
+  if (availability === "unavailable") throw new Error("NO_ON_DEVICE");
+  const session = await ctor.create({
+    systemPrompt: "You are Briefly, a precise text assistant. Follow the instruction exactly and output only the requested result.",
+  });
+  try {
+    return await session.prompt(prompt);
+  } finally {
+    if (typeof session.destroy === "function") session.destroy();
+  }
+}
+
+// ---------- Routing ----------
+
+async function run(mode, prompt) {
+  // Returns { text, engineLabel, engineClass }
+  if (mode === "device") {
+    if (firebaseConfigured()) {
+      const text = await runFirebase("device", prompt);
+      return { text, engineLabel: "On-device · Gemini Nano via Firebase AI Logic", engineClass: "device" };
+    }
+    const text = await runOnDevice(prompt);
+    return { text, engineLabel: "On-device · Gemini Nano (Chrome built-in AI)", engineClass: "device" };
+  }
+  if (mode === "cloud") {
+    const text = await runFirebase("cloud", prompt);
+    return { text, engineLabel: "Cloud · Gemini via Firebase AI Logic", engineClass: "cloud" };
+  }
+  // auto: Firebase hybrid when configured; otherwise on-device direct.
+  if (firebaseConfigured()) {
+    const text = await runFirebase("auto", prompt);
+    return { text, engineLabel: "Hybrid · Firebase AI Logic (on-device preferred)", engineClass: "device" };
+  }
+  const text = await runOnDevice(prompt);
+  return { text, engineLabel: "On-device · Gemini Nano (Chrome built-in AI)", engineClass: "device" };
+}
+
+function friendlyError(err) {
+  const msg = String((err && err.message) || err || "");
+  if (msg.includes("NO_FIREBASE_CONFIG")) {
+    return "Cloud engine is not configured yet. Add your Firebase project config in firebase-config.js (see README — free Spark plan is enough), or switch to “On-device only” in a Chrome browser with Gemini Nano.";
+  }
+  if (msg.includes("NO_ON_DEVICE")) {
+    return "On-device Gemini Nano is not available in this browser. Use a recent Chrome with the built-in AI model enabled/downloaded, or configure the Firebase cloud engine in firebase-config.js.";
+  }
+  if (/quota|RESOURCE_EXHAUSTED|429/i.test(msg)) {
+    return "The cloud model hit its free-tier quota. Wait a moment and try again, or use the on-device engine.";
+  }
+  return "Something went wrong while running the model: " + msg;
+}
+
+// ---------- UI wiring ----------
+
+function setBusy(busy) {
+  document.querySelectorAll(".action").forEach((b) => (b.disabled = busy));
+}
+
+async function execute(actionKey, question) {
+  const text = inputEl.value.trim();
+  if (!text) {
+    outputEl.textContent = "Paste some text first, then choose an action.";
+    return;
+  }
+  const mode = document.querySelector('input[name="mode"]:checked').value;
+  const prompt = PROMPTS[actionKey](text, question);
+  setBusy(true);
+  badgeEl.textContent = "Running…";
+  badgeEl.className = "badge";
+  metaEl.textContent = "";
+  const started = performance.now();
+  try {
+    const { text: out, engineLabel, engineClass } = await run(mode, prompt);
+    outputEl.textContent = out && out.trim() ? out.trim() : "(The model returned an empty result.)";
+    badgeEl.textContent = engineLabel;
+    badgeEl.className = "badge " + engineClass;
+    metaEl.textContent = `Mode: ${mode} · ${(performance.now() - started).toFixed(0)} ms · ${out.length} characters`;
+  } catch (err) {
+    outputEl.textContent = friendlyError(err);
+    badgeEl.textContent = "Needs attention";
+    badgeEl.className = "badge error";
+    metaEl.textContent = `Mode: ${mode}`;
+  } finally {
+    setBusy(false);
+  }
+}
+
+document.querySelectorAll(".action[data-action]").forEach((btn) => {
+  btn.addEventListener("click", () => execute(btn.dataset.action));
+});
+$("askBtn").addEventListener("click", () => {
+  const q = $("askInput").value.trim();
+  if (!q) { outputEl.textContent = "Type a question about the text first."; return; }
+  execute("ask", q);
+});
+$("copyBtn").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText(outputEl.textContent); $("copyBtn").textContent = "Copied!"; }
+  catch (_) { $("copyBtn").textContent = "Copy failed"; }
+  setTimeout(() => ($("copyBtn").textContent = "Copy result"), 1500);
+});
+$("sampleBtn").addEventListener("click", () => {
+  inputEl.value =
+    "The city council voted on Tuesday to approve the new riverside park project after two years of debate. The $4.2 million plan includes a walking trail, a small amphitheater, and restored wetlands along the east bank. Construction is scheduled to begin in March and finish within eighteen months. Supporters say the park will reduce flooding and give residents their first direct access to the river in decades. Critics raised concerns about maintenance costs, which the council addressed by creating a dedicated annual fund of $150,000. The mayor called the vote a turning point for the district and promised that the first section of the trail will open before the end of next year.";
+  updateCount();
+});
+function updateCount() { $("charCount").textContent = `${inputEl.value.length} characters`; }
+inputEl.addEventListener("input", updateCount);
+updateCount();
+
+// ---------- Engine status header ----------
+
+(async function initStatus() {
+  const nano = await nanoAvailability();
+  const nanoDot = $("nanoDot"), nanoLabel = $("nanoLabel");
+  if (nano === "available") { nanoDot.className = "dot dot-ok"; nanoLabel.textContent = "On-device Gemini Nano: ready"; }
+  else if (nano === "downloadable" || nano === "downloading") { nanoDot.className = "dot dot-unknown"; nanoLabel.textContent = "On-device Gemini Nano: downloadable"; }
+  else { nanoDot.className = "dot dot-bad"; nanoLabel.textContent = "On-device Gemini Nano: unavailable"; }
+
+  const cloudDot = $("cloudDot"), cloudLabel = $("cloudLabel");
+  if (firebaseConfigured()) { cloudDot.className = "dot dot-ok"; cloudLabel.textContent = "Cloud Gemini (Firebase AI Logic): configured"; }
+  else { cloudDot.className = "dot dot-bad"; cloudLabel.textContent = "Cloud Gemini: not configured (see README)"; }
+})();
