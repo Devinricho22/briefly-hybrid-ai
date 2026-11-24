@@ -13,4 +13,4 @@ window.BRIEFLY_FIREBASE_CONFIG = {
 
 // Cloud model used through Firebase AI Logic. Any Gemini model enabled
 // for your project works; the lite models are the fastest for text tasks.
-window.BRIEFLY_CLOUD_MODEL = "gemini-2.5-flash-lite";
+window.BRIEFLY_CLOUD_MODEL = "gemini-3.5-flash-lite";
