@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Briefly — Hybrid AI Text Studio</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">B</div>
+      <div>
+        <h1>Briefly</h1>
+        <p class="tagline">Hybrid AI Text Studio — on-device Gemini Nano + cloud Gemini via Firebase AI Logic</p>
+      </div>
+    </div>
+    <div class="engine-status" id="engineStatus" title="Engine availability">
+      <span class="dot dot-unknown" id="nanoDot"></span><span id="nanoLabel">Checking on-device AI…</span>
+      <span class="sep">·</span>
+      <span class="dot dot-unknown" id="cloudDot"></span><span id="cloudLabel">Checking cloud…</span>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="panel">
+      <label class="panel-title" for="inputText">Your text</label>
+      <textarea id="inputText" rows="12" placeholder="Paste or type any text — an article, an email draft, meeting notes…"></textarea>
+      <div class="row between">
+        <span class="muted" id="charCount">0 characters</span>
+        <button class="ghost" id="sampleBtn" type="button">Load sample</button>
+      </div>
+
+      <label class="panel-title">What should Briefly do?</label>
+      <div class="actions">
+        <button class="action" data-action="summarize" type="button">Summarize</button>
+        <button class="action" data-action="rewrite-formal" type="button">Rewrite · Formal</button>
+        <button class="action" data-action="rewrite-casual" type="button">Rewrite · Casual</button>
+        <button class="action" data-action="rewrite-shorter" type="button">Rewrite · Shorter</button>
+        <button class="action" data-action="translate-id" type="button">Translate → Indonesian</button>
+        <button class="action" data-action="translate-en" type="button">Translate → English</button>
+      </div>
+
+      <label class="panel-title" for="askInput">…or ask anything about the text</label>
+      <div class="row">
+        <input id="askInput" type="text" placeholder="e.g. What are the three key decisions in this text?" />
+        <button class="action primary" id="askBtn" type="button">Ask</button>
+      </div>
+
+      <label class="panel-title">Inference mode</label>
+      <div class="modes" role="radiogroup" aria-label="Inference mode">
+        <label><input type="radio" name="mode" value="auto" checked /> Auto (prefer on-device)</label>
+        <label><input type="radio" name="mode" value="device" /> On-device only</label>
+        <label><input type="radio" name="mode" value="cloud" /> Cloud only</label>
+      </div>
+      <p class="hint">Auto uses Firebase AI Logic hybrid inference: Gemini Nano on this device when available, cloud Gemini as fallback — private, fast and offline-capable first, powerful when needed.</p>
+    </section>
+
+    <section class="panel">
+      <div class="row between">
+        <label class="panel-title" for="outputText">Result</label>
+        <span class="badge" id="engineBadge">No run yet</span>
+      </div>
+      <div id="outputText" class="output" aria-live="polite">Your result will appear here.</div>
+      <div class="row between">
+        <span class="muted" id="runMeta"></span>
+        <button class="ghost" id="copyBtn" type="button">Copy result</button>
+      </div>
+      <div class="explainer">
+        <h2>How the hybrid engine works</h2>
+        <ol>
+          <li><strong>On-device first.</strong> In Auto mode, Firebase AI Logic runs Gemini Nano locally in Chrome — the text never leaves the device, it works offline and answers in milliseconds.</li>
+          <li><strong>Cloud fallback.</strong> If the on-device model is unavailable or the request is too large, the same call transparently falls back to cloud Gemini through Firebase AI Logic.</li>
+          <li><strong>You stay in control.</strong> Force either engine with the inference mode switch and watch the badge: every result is labelled with the engine that actually produced it.</li>
+        </ol>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span>Built for #BuildHybridAI 2026 · Firebase AI Logic · Gemini Nano (Chrome built-in AI) · Cloud Gemini</span>
+  </footer>
+
+  <script src="firebase-config.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
